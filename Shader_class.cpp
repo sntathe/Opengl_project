@@ -1,5 +1,6 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+
 #include "shader_s.h"
 
 #include <iostream>
@@ -14,14 +15,16 @@
 #include <math.h>
 
 using namespace std;
-#define NUMBER_OF_VERTICES 100
+constexpr auto NUMBER_OF_VERTICES = 100;
 #define M_PI 3.14
 
 string ongoing_command = "";
+string ongoing_command_fb = "";
 Point* line_start = NULL;
 Point* line_end = NULL;
 
 Point* cen_cir = NULL;
+bool mouse_capture = false;
 
 float cir_rad;
 
@@ -43,6 +46,11 @@ std::vector<Circle*> Circles;
 std::vector<unsigned int> Circles_VAO;
 std::vector<unsigned int> Lines_VAO;
 
+unsigned int Circle_VAO_fb;
+
+unsigned int Line_VAO_fb;
+
+
 bool compare_float(float x, float y, float epsilon = 0.01f) {
     if (fabs(x - y) < epsilon)
         return true; //they are same
@@ -60,11 +68,16 @@ int  AskforSelection()
     int selection = 0;
     std::cout << "-----------------------------------------------------------------" << std::endl;
     std::cout << "Draw Shapes" << std::endl;
-    std::cout << "1. Draw Line from ViewPort" << std::endl;
-    std::cout << "2. Draw Circle from ViewPort" << std::endl;
-    std::cout << "3. Draw Line with Command Prompt" << std::endl;
-    std::cout << "4. Draw Circle with Command Prompt" << std::endl;
-    std::cout << "5. Change geometry Color" << std::endl;
+    std::cout << "1. Draw free geometry" << std::endl;
+    std::cout << "2. Draw Line from ViewPort" << std::endl;
+    std::cout << "3. Draw Circle from ViewPort" << std::endl;
+    std::cout << "4. Draw Concentric Circle from ViewPort" << std::endl;
+
+    std::cout << "5. Draw Polylines from ViewPort" << std::endl;
+    std::cout << "6. Draw Line with Command Prompt" << std::endl;
+    std::cout << "7. Draw Circle with Command Prompt" << std::endl;
+    std::cout << "8. Change geometry Color" << std::endl;
+    std::cout << "9. Clear the screen" << std::endl;
     std::cout << "Enter your selection...." << std::endl;
     cin >> selection;
     std::cout << "-----------------------------------------------------------------" << std::endl;
@@ -279,6 +292,25 @@ void RenderGeometry( Shader ourShader , GLFWwindow* window)
                 glDrawArrays(GL_LINE_LOOP, 0,  NUMBER_OF_VERTICES);
                 }
         }
+
+        if (Circle_VAO_fb > 0)
+        {
+            glBindVertexArray(Circle_VAO_fb);
+
+            glDrawArrays(GL_LINE_LOOP, 0, NUMBER_OF_VERTICES);
+        }
+
+        if (Line_VAO_fb > 0)
+        {
+            glBindVertexArray(Line_VAO_fb);
+
+            glDrawArrays(GL_LINE_LOOP, 0, 2);
+        }
+
+
+
+        
+        
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -366,6 +398,36 @@ void create_Line_for_Opengl(Line *l1)
     Lines_VAO.push_back(VAO);
 }
 
+void create_Line_for_Opengl_fb(Line* l1)
+{
+
+    Lines.push_back(l1);
+    vector<float> vertices;
+    Point* p1 = l1->start;
+    Point* p2 = l1->end;
+    vertices.push_back(p1->x); vertices.push_back(p1->y); vertices.push_back(p1->z);
+    vertices.push_back(geo_color[0]); vertices.push_back(geo_color[1]); vertices.push_back(geo_color[2]);
+    vertices.push_back(p2->x); vertices.push_back(p2->y); vertices.push_back(p2->z);
+    vertices.push_back(geo_color[0]); vertices.push_back(geo_color[1]); vertices.push_back(geo_color[2]);
+    unsigned int VBO, EBO, VAO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+    int s = vertices.size();
+    // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
+    glBindVertexArray(VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, s * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+    // position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    // color attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    Line_VAO_fb = VAO;
+}
+
 
 void create_Circle_for_Opengl(Circle* c1)
 {
@@ -397,8 +459,43 @@ void create_Circle_for_Opengl(Circle* c1)
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
     Circles_VAO.push_back(VAO);
-    cen_cir = NULL;
-    ongoing_command = "";
+    
+
+}
+
+
+
+void create_Circle_for_Opengl_fb(Circle* c1)
+{
+
+    Circles.push_back(c1);
+    std::vector<float> vertexBuffer;
+    for (double i = 0; i < 2 * M_PI; i += 2 * M_PI / NUMBER_OF_VERTICES) {
+        vertexBuffer.push_back(cos(i) * c1->rad + c1->cen->x);    //X coordinate
+        vertexBuffer.push_back(sin(i) * c1->rad + c1->cen->y);    //Y coordinate
+        vertexBuffer.push_back(0.0);                //Z coordinate
+        vertexBuffer.push_back(geo_color[0]); vertexBuffer.push_back(geo_color[1]); vertexBuffer.push_back(geo_color[2]);
+    }
+    unsigned int VBO;
+    unsigned int VAO;
+
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
+    glBindVertexArray(VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, vertexBuffer.size() * sizeof(float), vertexBuffer.data(), GL_STATIC_DRAW);
+
+    // position attribute
+    //glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    // color attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    Circle_VAO_fb = VAO;
+
 
 }
 
@@ -406,60 +503,201 @@ void processInput(GLFWwindow* window , Shader ourShader)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+    {
+        ongoing_command = "";
+         ongoing_command = "";
+         line_start = NULL;
+         line_end = NULL;
+
+        cen_cir = NULL;
+
+        unsigned int Circle_VAO_fb = 0 ;
+
+        unsigned int Line_VAO_fb = 0 ;
+         mouse_capture = false;
+    }
+
     if (ongoing_command == "")
     {
         Line* l1 = NULL;
         int ip;
         int sel = AskforSelection();
-        if (sel == 1)
+        if (sel > 0 && sel < 10)
         {
-            ongoing_command = "line";
-            cout << "Drawing Line" << endl;
-            cout << "Mark start Point on viewport" << endl;
-        }
-        else if (sel == 2)
-        {
-            Circle* c1 = NULL;
-            ongoing_command = "circle";
-            cout << "Drawing Circle" << endl;
-            cout << "Mark center Point on viewport" << endl;
-        }
-        
-        else if (sel == 3)
-        {
-            l1 = AskforLineInputs();
-            if (l1)
+            if (sel == 1)
             {
-                create_Line_for_Opengl(l1);
+                ongoing_command = "FreeGeom";
+                cout << "Drawing FreeGeom" << endl;
+                cout << "Drag Mouse by left click" << endl;
+                cout << "Press Q button on viewport to end the current command" << endl;
+
+            }
+            else if (sel == 2)
+            {
+                ongoing_command = "line";
+                cout << "Drawing Line" << endl;
+                cout << "Mark start Point on viewport" << endl;
+            }
+            else if (sel == 3)
+            {
+                Circle* c1 = NULL;
+                ongoing_command = "circle";
+                cout << "Drawing Circle" << endl;
+                cout << "Mark center Point on viewport" << endl;
+            }
+
+            else if (sel == 4)
+            {
+                Circle* c1 = NULL;
+                ongoing_command = "con_circle";
+                cout << "Drawing Concetric Circles" << endl;
+                cout << "Mark Center Point on viewport" << endl;
+            }
+
+            else if (sel == 5)
+            {
+                Circle* c1 = NULL;
+                ongoing_command = "Polyline";
+                cout << "Drawing Polyline" << endl;
+                cout << "Mark start Point on viewport" << endl;
+            }
+
+            else if (sel == 6)
+            {
+                l1 = AskforLineInputs();
+                if (l1)
+                {
+                    create_Line_for_Opengl(l1);
+                    ongoing_command = "";
+                }
+            }
+
+            else if (sel == 7)
+            {
+                Circle* c1 = NULL;
+                c1 = AskforCircleInputs();
+                if (c1)
+                {
+                    create_Circle_for_Opengl(c1);
+                    ongoing_command = "";
+
+                }
+
+            }
+
+
+            else if (sel == 8)
+            {
+
+                AskForColor(geo_color);
                 ongoing_command = "";
-            }
-        }
 
-        else if (sel == 4)
-        {
-            Circle* c1 = NULL;
-            c1 = AskforCircleInputs();
-            if (c1)
+            }
+            else if (sel == 9)
             {
-                create_Circle_for_Opengl(c1);
-             ongoing_command = "";
-
+                Lines_VAO.clear();
+                Circles_VAO.clear();
+            }
+            else
+            {
+                AskforSelection();
             }
 
         }
-      
-
-        else 
+       
+        else
         {
-
-            AskForColor(geo_color); 
-            ongoing_command = "";
-
+            AskforSelection();
         }
      }
 
-    else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+
+    else if ( (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) && (ongoing_command != "FreeGeom"))
     {
+        mouse_capture = true;
+    }
+    else if ((glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE) && (ongoing_command == "FreeGeom"))
+    {
+        line_start = NULL;
+        line_end = NULL;
+    }
+
+    else if (((glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE) && !mouse_capture))
+
+    {
+        
+
+        if (ongoing_command_fb == "circle")
+        {
+            if (cen_cir)
+            {
+                double xpos, ypos;
+                //getting cursor position
+
+                glfwGetCursorPos(window, &xpos, &ypos);
+                double xpos_actual, ypos_actual;
+                xpos = -1 * (((SCR_WIDTH / 2) - xpos) / (SCR_WIDTH / 2));
+                ypos = ((SCR_HEIGHT / 2) - ypos) / (SCR_HEIGHT / 2);
+
+
+                if (!(compare_float(cen_cir->x, xpos) && compare_float(cen_cir->y, ypos)))
+                {
+                    Point end;
+
+                    end.x = xpos;
+                    end.y = ypos;
+                    cir_rad = distance_two_points(*cen_cir, end);
+                    //cout << "Radius is " << cir_rad << endl;
+
+                    Point* cen_cir2 = new Point(cen_cir->x, cen_cir->y, 0.0);
+
+                    Circle* c1 = new Circle(cen_cir2, cir_rad);
+                    create_Circle_for_Opengl_fb(c1);
+                }
+
+            }
+        }
+
+        if (ongoing_command_fb == "line")
+        {
+            if (line_start)
+            {
+                double xpos, ypos;
+                //getting cursor position
+
+                glfwGetCursorPos(window, &xpos, &ypos);
+                double xpos_actual, ypos_actual;
+                xpos = -1 * (((SCR_WIDTH / 2) - xpos) / (SCR_WIDTH / 2));
+                ypos = ((SCR_HEIGHT / 2) - ypos) / (SCR_HEIGHT / 2);
+                Point end;
+
+
+                if (!(compare_float(line_start->x, xpos) && compare_float(line_start->y, ypos)))
+                {
+                    end.x = xpos;
+                    end.y = ypos;
+                    float end_vec[3];
+                    end_vec[0] = end.x;
+                    end_vec[1] = end.y;
+                    end_vec[2] = 0;
+
+                    line_end = new Point(end_vec);
+
+                    Line* l1 = new Line(line_start, line_end);
+
+
+                    create_Line_for_Opengl_fb(l1);
+                }
+            }
+
+        }
+    }
+    else if ( ( (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE) && mouse_capture && (ongoing_command != "FreeGeom")) ||
+        ((glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) && (ongoing_command == "FreeGeom")))
+    {
+        mouse_capture = false;
         bool is_cen_taken = false;
         double xpos, ypos;
         //getting cursor position
@@ -469,7 +707,7 @@ void processInput(GLFWwindow* window , Shader ourShader)
         xpos = -1 * (((SCR_WIDTH / 2) - xpos) / (SCR_WIDTH / 2));
         ypos = ((SCR_HEIGHT / 2) - ypos) / (SCR_HEIGHT / 2);
 
-        if (ongoing_command == "line")
+        if (ongoing_command == "line" || ongoing_command == "Polyline" || ongoing_command == "FreeGeom")
         {
             Point start;
             Point end;
@@ -482,10 +720,23 @@ void processInput(GLFWwindow* window , Shader ourShader)
                 start_vec[0] = start.x;
                 start_vec[1] = start.y;
                 start_vec[2] = 0;
-                cout << "Start Point are (" << xpos << "," << ypos << ")" << endl;
 
+                if (ongoing_command != "FreeGeom")
+                {
+                    cout << "Start Point is (" << xpos << "," << ypos << ")" << endl;
+
+                   
+                    cout << "Mark end Point on viewport" << endl;
+
+                    ongoing_command_fb = "line";
+
+                }
                 line_start = new Point(start_vec);
-                cout << "Mark end Point on viewport" << endl;
+
+
+
+
+               
 
             }
             else
@@ -498,23 +749,41 @@ void processInput(GLFWwindow* window , Shader ourShader)
                     end_vec[0] = end.x;
                     end_vec[1] = end.y;
                     end_vec[2] = 0;
-                    cout << "End Point are (" << xpos << "," << ypos << ")" << endl;
+                    if(ongoing_command != "FreeGeom")
+                        cout << "Marked Point is (" << xpos << "," << ypos << ")" << endl;
+                    if (ongoing_command != "FreeGeom")
+                    {
+                        if (ongoing_command == "Polyline")
+                            cout << "Mark Points on Viewport OR Press Q button on viewport to end the current command" << endl;
+                        else
+                            cout << "Mark Start Point  on Viewport OR Press Q button on viewport to end the current command" << endl;
 
+
+                    }
                     line_end = new Point(end_vec);
 
                     Line* l1 = new Line(line_start, line_end);
 
-                    line_start = NULL;
-                    line_end = NULL;
+                   
                     create_Line_for_Opengl(l1);
-                    ongoing_command = "";
+                    if (ongoing_command == "line")
+                    {
+                        line_start = NULL;
+                        line_end = NULL;
+                        //ongoing_command = "";
+                    }
+                       
+                    else
+                    {
+                        line_start = line_end;
+                    }
                 }
                 
 
             }
         }
 
-        if (ongoing_command == "circle")
+        if ( (ongoing_command == "circle") || (ongoing_command == "con_circle"))
         {
             Point cen;
             Point end;
@@ -534,6 +803,7 @@ void processInput(GLFWwindow* window , Shader ourShader)
 
                     cen_cir = new Point(ver_cen);
                     cout << "Mark radial point viewport" << endl;
+                    ongoing_command_fb = "circle";
 
                 }
                 else
@@ -552,6 +822,14 @@ void processInput(GLFWwindow* window , Shader ourShader)
 
                         Circle* c1 = new Circle(cen_cir2, cir_rad);
                         create_Circle_for_Opengl( c1);
+
+                        if (ongoing_command == "circle")
+                            cen_cir = NULL;
+                        if (ongoing_command == "circle")
+                            cout << "Mark Center Point  on Viewport OR Press Q button on viewport to end the current command" << endl;
+                        else
+                            cout << "Mark radial Point  on Viewport OR Press Q button on viewport to end the current command" << endl;
+
 
                        }
                             
