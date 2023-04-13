@@ -29,6 +29,9 @@ bool mouse_capture = false;
 float cir_rad;
 
 float geo_color[3] = { 0.0f , 0.0f , 1.0f };
+int poly_count = 0;
+Point* poly_cen = NULL;
+
 
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -46,9 +49,13 @@ std::vector<Circle*> Circles;
 std::vector<unsigned int> Circles_VAO;
 std::vector<unsigned int> Lines_VAO;
 
+std::vector<unsigned int>  poly_VAO;
+
 unsigned int Circle_VAO_fb;
 
 unsigned int Line_VAO_fb;
+
+
 
 
 bool compare_float(float x, float y, float epsilon = 0.01f) {
@@ -76,8 +83,9 @@ int  AskforSelection()
     std::cout << "5. Draw Polylines from ViewPort" << std::endl;
     std::cout << "6. Draw Line with Command Prompt" << std::endl;
     std::cout << "7. Draw Circle with Command Prompt" << std::endl;
-    std::cout << "8. Change geometry Color" << std::endl;
-    std::cout << "9. Clear the screen" << std::endl;
+    std::cout << "8. Draw Polygon" << std::endl;
+    std::cout << "9. Change geometry Color" << std::endl;
+    std::cout << "10. Clear the screen" << std::endl;
     std::cout << "Enter your selection...." << std::endl;
     cin >> selection;
     std::cout << "-----------------------------------------------------------------" << std::endl;
@@ -177,6 +185,15 @@ Circle* AskforCircleInputs()
     Point* p1 = new Point(cen);
     Circle* c = new Circle(p1, rad);
     return c;
+}
+
+
+int AskForPolygonCount()
+{
+    int count;
+    std::cout << "Enter number of sides" << std::endl;
+    cin >> count;
+    return count;
 }
 
 
@@ -307,6 +324,20 @@ void RenderGeometry( Shader ourShader , GLFWwindow* window)
             glDrawArrays(GL_LINE_LOOP, 0, 2);
         }
 
+    
+
+
+        if (poly_VAO.size() > 0)
+        {
+            for (auto itr = poly_VAO.begin(); itr != poly_VAO.end(); itr++)
+            {
+                glBindVertexArray(*itr);
+
+                glDrawArrays(GL_LINE_LOOP, 0, 2);
+            }
+        }
+        
+
 
 
         
@@ -398,6 +429,37 @@ void create_Line_for_Opengl(Line *l1)
     Lines_VAO.push_back(VAO);
 }
 
+void create_polygon_for_Opengl_fb_fun(Line* l1)
+{
+
+    Lines.push_back(l1);
+    vector<float> vertices;
+    Point* p1 = l1->start;
+    Point* p2 = l1->end;
+    vertices.push_back(p1->x); vertices.push_back(p1->y); vertices.push_back(p1->z);
+    vertices.push_back(geo_color[0]); vertices.push_back(geo_color[1]); vertices.push_back(geo_color[2]);
+    vertices.push_back(p2->x); vertices.push_back(p2->y); vertices.push_back(p2->z);
+    vertices.push_back(geo_color[0]); vertices.push_back(geo_color[1]); vertices.push_back(geo_color[2]);
+    unsigned int VBO, EBO, VAO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+    int s = vertices.size();
+    // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
+    glBindVertexArray(VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, s * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+    // position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    // color attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    poly_VAO.push_back(VAO);
+}
+
+
 void create_Line_for_Opengl_fb(Line* l1)
 {
 
@@ -464,6 +526,46 @@ void create_Circle_for_Opengl(Circle* c1)
 }
 
 
+void  create_polygon_for_Opengl_fb(float rad)
+{
+
+    float r = rad;
+    float x_centre = poly_cen->x;
+    float y_centre = poly_cen->y;
+    float x;
+    float y;
+
+    Line* prev = NULL;
+    Line* curr = NULL;
+    Point* prev_pnt = NULL;
+    Point* curr_pnt = NULL;
+
+
+    for (int i = 0; i <= poly_count; i++)
+    {
+        y = r * cos(2 * M_PI * i / poly_count) + y_centre;
+        x = r * sin(2 * M_PI * i / poly_count) + x_centre;
+
+        float curr_vec[3];
+        curr_vec[0] = x;
+        curr_vec[1] = y;
+        curr_vec[2] = 0;
+
+        curr_pnt = new Point(curr_vec);
+
+        if (i > 0)
+        {
+
+            Line* l1 = new Line(prev_pnt, curr_pnt);
+            create_polygon_for_Opengl_fb_fun(l1);
+        }
+
+        prev_pnt = curr_pnt;
+
+    }
+}
+
+
 
 void create_Circle_for_Opengl_fb(Circle* c1)
 {
@@ -499,6 +601,43 @@ void create_Circle_for_Opengl_fb(Circle* c1)
 
 }
 
+void createPolygon(float rad)
+{
+    float r = rad;
+    float x_centre = poly_cen->x;
+    float y_centre = poly_cen->y;
+    float x;
+    float y;
+
+    Line* prev = NULL;
+    Line* curr = NULL;
+    Point* prev_pnt = NULL;
+    Point* curr_pnt = NULL;
+
+
+    for (int i = 0; i <= poly_count; i++)
+    {
+        y = r * cos(2 * M_PI * i / poly_count) + y_centre;
+        x = r * sin(2 * M_PI * i / poly_count) + x_centre;
+
+        float curr_vec[3];
+        curr_vec[0] = x;
+        curr_vec[1] = y;
+        curr_vec[2] = 0;
+
+        curr_pnt = new Point(curr_vec);
+
+        if (i > 0)
+        {
+
+            Line* l1 = new Line(prev_pnt, curr_pnt);
+            create_Line_for_Opengl(l1);
+        }
+
+        prev_pnt = curr_pnt;
+
+    }
+}
 void processInput(GLFWwindow* window , Shader ourShader)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -524,7 +663,7 @@ void processInput(GLFWwindow* window , Shader ourShader)
         Line* l1 = NULL;
         int ip;
         int sel = AskforSelection();
-        if (sel > 0 && sel < 10)
+        if (sel > 0 && sel < 11)
         {
             if (sel == 1)
             {
@@ -586,16 +725,23 @@ void processInput(GLFWwindow* window , Shader ourShader)
                 }
 
             }
-
-
             else if (sel == 8)
+            {
+
+                poly_count =AskForPolygonCount();
+                cout << "Mark center Point on viewport" << endl;
+                ongoing_command = "polygon";
+
+            }
+
+            else if (sel == 9)
             {
 
                 AskForColor(geo_color);
                 ongoing_command = "";
 
             }
-            else if (sel == 9)
+            else if (sel == 10)
             {
                 Lines_VAO.clear();
                 Circles_VAO.clear();
@@ -693,6 +839,42 @@ void processInput(GLFWwindow* window , Shader ourShader)
             }
 
         }
+
+
+        if (ongoing_command_fb == "polygon")
+        {
+            poly_VAO.clear();
+            if (poly_count > 2 && poly_cen)
+            {
+                double xpos, ypos;
+                //getting cursor position
+
+                glfwGetCursorPos(window, &xpos, &ypos);
+                double xpos_actual, ypos_actual;
+                xpos = -1 * (((SCR_WIDTH / 2) - xpos) / (SCR_WIDTH / 2));
+                ypos = ((SCR_HEIGHT / 2) - ypos) / (SCR_HEIGHT / 2);
+                Point end;
+                end.x = xpos;
+                end.y = ypos;
+                end.z = 0.0f;
+
+                float rad = 0.0f;
+                rad = distance_two_points(*poly_cen, end);
+
+
+                //if (!(compare_float(line_start->x, xpos) && compare_float(line_start->y, ypos)))
+               // {
+                   
+
+
+                    create_polygon_for_Opengl_fb( rad );
+                    
+                //}
+            }
+
+        }
+
+       
     }
     else if ( ( (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE) && mouse_capture && (ongoing_command != "FreeGeom")) ||
         ((glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) && (ongoing_command == "FreeGeom")))
@@ -836,6 +1018,47 @@ void processInput(GLFWwindow* window , Shader ourShader)
                     
                 }
             
+        }
+
+        if (ongoing_command == "polygon")
+        {
+            double xpos, ypos;
+            //getting cursor position
+
+            glfwGetCursorPos(window, &xpos, &ypos);
+            double xpos_actual, ypos_actual;
+            xpos = -1 * (((SCR_WIDTH / 2) - xpos) / (SCR_WIDTH / 2));
+            ypos = ((SCR_HEIGHT / 2) - ypos) / (SCR_HEIGHT / 2);
+            if (!poly_cen)
+            {
+                cout << "Mark center Point on Viewport OR Press Q button on viewport to end the current command" << endl;
+
+                poly_cen = new Point(xpos, ypos, 0.0);
+                ongoing_command_fb = "polygon";
+
+
+            }
+
+            else
+            {
+               
+                Point *end = new Point(xpos, ypos, 0.0);
+
+
+                float rad = 0.0f;
+                rad = distance_two_points(*poly_cen, *end);
+
+                createPolygon(rad);
+                poly_cen = NULL;
+
+
+            }
+
+
+
+
+
+
         }
 
 
